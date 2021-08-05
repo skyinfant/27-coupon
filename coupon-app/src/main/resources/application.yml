@@ -1,0 +1,104 @@
+server:
+   port: 8050
+druid:
+  allow:
+     ip: 127.0.0.1
+  login:
+     user_name:
+     password:
+spring:
+  datasource:
+    driver-class-name: com.mysql.jdbc.Driver
+    url: jdbc:mysql://kim1:3306/27_coupon?autoReconnect=true&failOverReadOnly=false&useUnicode=true&characterEncoding=UTF-8&useSSL=false
+    username: root
+    password: 123
+    type: com.alibaba.druid.pool.DruidDataSource
+    initial-size: 1
+    max-wait-millis: 60000
+    timeBetweenEvictionRunsMillis: 60000
+      # 配置一个连接在池中最小生存的时间，单位是毫秒
+    minEvictableIdleTimeMillis: 300000
+    validationQuery: SELECT 1 FROM DUAL
+    testWhileIdle: true
+    testOnBorrow: true
+    testOnReturn: false
+    maxPoolPreparedStatementPerConnectionSize: 20
+      # 配置监控统计拦截的filters，去掉后监控界面sql无法统计，'wall'用于防火墙
+    filters: stat,wall
+      # 通过connectProperties属性来打开mergeSql功能；慢SQL记录
+    connectionProperties: druid.stat.mergeSql=true;druid.stat.slowSqlMillis=5000
+
+  redis:
+    host: kim1
+    port: 2683
+    password: FSDFASN22RR2656jflds84kfjWYFADS37VUUYT84326
+
+
+#打印sql
+#mybatis:
+#  configuration:
+#    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+
+
+dubbo:
+  application:
+    name: coupon-app
+    qosPort: 22250
+  # 使用 zookeeper 注册中心暴露服务，注意要先开启 zookeeper
+  # 注册中心id
+  registry:
+    id: zookeeper-registry
+    # 注册中心协议
+    protocol: zookeeper
+    # 注册中心地址
+    address: kim2:2181
+
+  # dubbo协议在20880端口暴露服务
+  # 协议名称
+  protocol:
+    name: dubbo
+    # 协议端口
+    port: 20850
+    # 协议访问log
+    accesslog: dubbo-access.log
+  # 重试次数
+  provider:
+    retries: 0
+    # 超时时间
+    timeout: 3000
+  # 注册监控中心
+#  monitor:
+#    protocol: registry
+#  config-center:
+#    protocol: zookeeper
+#    address: kim2:2181
+
+
+logging:
+   name: logs
+   config: classpath:logback-spring.xml
+   level:
+      root: info
+
+rocketmq:
+  consumer:
+    test:
+      groupName: test
+      namesrvAddr: kim2:9876
+      topic: TopicTest
+      tag: Tag1
+    order:
+      groupName: saveOrder
+      namesrvAddr: kim2:9876
+      topic: saveOrder
+      tag: Tag1
+    pay:
+      groupName: payResult
+      namesrvAddr: kim2:9876
+      topic: payResult
+      tag: Tag1
+    cancel:
+      groupName: cancelOrder
+      namesrvAddr: kim2:9876
+      topic: cancelOrder
+      tag: Tag1
