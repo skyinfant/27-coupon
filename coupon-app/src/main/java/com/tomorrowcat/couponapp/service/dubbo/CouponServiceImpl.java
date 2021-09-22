@@ -29,11 +29,13 @@ import org.slf4j.LoggerFactory;
 import com.alibaba.fastjson.JSONObject;
 import org.springframework.beans.BeanUtils;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.ZSetOperations;
 import org.springframework.util.CollectionUtils;
 
 
 import javax.annotation.PostConstruct;
 import javax.annotation.Resource;
+import java.math.BigDecimal;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
@@ -78,7 +80,7 @@ public class CouponServiceImpl implements CouponService {
         example.createCriteria().andStatusEqualTo(Constant.USERFUL)
                 .andStartTimeLessThan(new Date())
                 .andEndTimeGreaterThan(new Date());
-//        System.out.println("debug===================================");
+
         return couponMapper.selectByExample(example);
     }
 
@@ -120,6 +122,7 @@ public class CouponServiceImpl implements CouponService {
         List<CouponDto> dtos = Lists.newArrayList();
 
         try {
+            //这个缓存key没有意义，随便用一个数字都可以获取
             coupons = couponCaffeine.get(1);
         } catch (Exception e) {
             e.printStackTrace();
@@ -142,49 +145,74 @@ public class CouponServiceImpl implements CouponService {
      */
     @Override
     public String saveUserCoupon(UserCouponDto dto) {
+//        System.out.println("进入领券方法。。。");
         String result = check(dto);
-        if(result != null){
+        if (result != null) {
             return result;
         }
         TCoupon coupon = couponMapper.selectByPrimaryKey(dto.getCouponId());
-        if(coupon == null){
+        if (coupon == null) {
             return "coupon 无效";
         }
-        return save2DB(dto,coupon);
+
+        boolean isDuplicate = isDuplicateUserCoupon(dto.getUserId(), coupon.getId());
+        if (isDuplicate) {
+            return "该券您已经领取过了";
+        }
+
+        return save2DB(dto, coupon);
+
     }
 
     /**
-     * @description:  根据用户id，获取该用户拥有的优惠券   用户结账时调用
+     * @description: 检查某张券是否已经领取过，同一个用户同一张优惠券只能领取一次
+     * @param: userId
+     * @return: int
+     */
+    private boolean isDuplicateUserCoupon(int userId, int couponId) {
+        //查出用户未使用的券
+        TUserCouponExample example = new TUserCouponExample();
+        example.createCriteria().andUserIdEqualTo(userId)
+                .andCouponIdEqualTo(couponId)
+                .andStatusEqualTo(0);
+        List<TUserCoupon> userCoupons = userCouponMapper.selectByExample(example);
+
+        return userCoupons.size() > 0 ? true : false;
+    }
+
+
+    /**
+     * @description: 根据用户id，获取该用户拥有的优惠券
      * @param: userId
      * @return: List<UserCouponInfoDto>
      */
     @Override
     public List<UserCouponInfoDto> userCouponList(Integer userId) {
         List<UserCouponInfoDto> dtos = Lists.newArrayList();
-        if(userId == null){
+        if (userId == null) {
             return dtos;
         }
         //获取此用户的UserCoupon
         List<TUserCoupon> userCoupons = getUserCoupons(userId);
-        if(CollectionUtils.isEmpty(userCoupons)){
+        if (CollectionUtils.isEmpty(userCoupons)) {
             return dtos;
         }
 
         //获取 Map<couponId,TCoupon>
-        Map<Integer,TCoupon> couponMap = getCouponMap(userCoupons);
+        Map<Integer, TCoupon> couponMap = getCouponMap(userCoupons);
 
         //封装coupon   返回1个List<UserCouponInfoDto>
-        return wrapCoupon(userCoupons,couponMap);
+        return wrapCoupon(userCoupons, couponMap);
 
     }
 
     /**
-     * @description:  List<TUserCoupon> + Map<CouponId,TCoupon> ---> List<UserCouponInfoDto>
+     * @description: List<TUserCoupon> + Map<CouponId,TCoupon> ---> List<UserCouponInfoDto>
      * @param: userCoupons
      * @param: idCouponMap
      * @return: List<UserCouponInfoDto>
      */
-    private List<UserCouponInfoDto> wrapCoupon(List<TUserCoupon> userCoupons, Map<Integer,TCoupon> couponMap) {
+    private List<UserCouponInfoDto> wrapCoupon(List<TUserCoupon> userCoupons, Map<Integer, TCoupon> couponMap) {
 
         List<UserCouponInfoDto> dtos = userCoupons.stream().map(userCoupon -> {
             UserCouponInfoDto dto = new UserCouponInfoDto();
@@ -193,7 +221,7 @@ public class CouponServiceImpl implements CouponService {
             TCoupon coupon = couponMap.get(couponId);
             dto.setAchieveAmount(coupon.getAchieveAmount());
             dto.setReduceAmount(coupon.getReduceAmount());
-            logger.info("get user coupon list  result:{}",JSONObject.toJSON(dto));
+            logger.info("get user coupon list  result:{}", JSONObject.toJSON(dto));
             return dto;
 
         }).collect(Collectors.toList());
@@ -201,29 +229,29 @@ public class CouponServiceImpl implements CouponService {
     }
 
     /**
-     * @description:    List<TUserCoupon> ---> Map<couponId,TCoupon>
+     * @description: List<TUserCoupon> ---> Map<couponId,TCoupon>
      * @param: userCoupon
-     * @return: Map<Integer,TCoupon>
+     * @return: Map<Integer   ,   TCoupon>
      */
-    private Map<Integer,TCoupon> getCouponMap(List<TUserCoupon> userCoupons) {
+    private Map<Integer, TCoupon> getCouponMap(List<TUserCoupon> userCoupons) {
         Set<Integer> couponIds = getCouponIds(userCoupons);
         List<TCoupon> coupons = getCouponListByIds(StringUtils.join(couponIds, ","));
-        Map<Integer,TCoupon> couponMap = couponList2Map(coupons);
+        Map<Integer, TCoupon> couponMap = couponList2Map(coupons);
         return couponMap;
     }
 
     /**
-     * @description:    List<TCoupon> ----> Map<CouponId,TCoupon>
+     * @description: List<TCoupon> ----> Map<CouponId,TCoupon>
      * @param: coupons
-     * @return: Map<Integer,TCoupon>
+     * @return: Map<Integer   ,   TCoupon>
      */
-    private Map<Integer,TCoupon> couponList2Map(List<TCoupon> coupons) {
+    private Map<Integer, TCoupon> couponList2Map(List<TCoupon> coupons) {
         return coupons.stream().collect(Collectors
-        .toMap(o -> o.getId(), o -> o));
+                .toMap(o -> o.getId(), o -> o));
     }
 
     /**
-     *获取couponIds          List<TUserCoupon> ---> Set<CouponId>
+     * 获取couponIds          List<TUserCoupon> ---> Set<CouponId>
      */
     private Set<Integer> getCouponIds(List<TUserCoupon> userCoupons) {
         Set<Integer> couponIds = userCoupons.stream().map(userCoupon -> userCoupon.getCouponId()).collect(Collectors.toSet());
@@ -233,7 +261,7 @@ public class CouponServiceImpl implements CouponService {
     }
 
     /**
-     * @description:  从数据库获查询个用户的优惠券
+     * @description: 从数据库获查询用户的优惠券
      * @param: userId
      * @return: List<TUserCoupon>
      */
@@ -247,10 +275,8 @@ public class CouponServiceImpl implements CouponService {
     }
 
 
-
-
     /**
-     * @description:  把用户领取的优惠券入库
+     * @description: 把用户领取的优惠券入库
      * @param: dto
      * @param: coupon
      * @return: String
@@ -261,18 +287,20 @@ public class CouponServiceImpl implements CouponService {
         userCoupon.setPicUrl(coupon.getPicUrl());
         userCoupon.setCreateTime(new Date());
         SnowflakeIdWorker worker = new SnowflakeIdWorker(0, 0);
-        //userCoupon表的code和coupon的code是不一样的，后者由雪花算法生成，保证唯一性
-        userCoupon.setUserCouponCode(worker.nextId()+"");
+
+        //userCoupon表的code和coupon的code是不一样的，前者由雪花算法生成，保证唯一性
+        userCoupon.setUserCouponCode(worker.nextId() + "");
+
         userCouponMapper.insertSelective(userCoupon);
-        logger.info("save coupon sccess:{}",JSON.toJSONString(userCoupon));
+        logger.info("save coupon sccess:{}", JSON.toJSONString(userCoupon));
         return "领取成功";
 
     }
 
-    public String check(UserCouponDto dto){
-        Integer couponId =  dto.getCouponId();
+    public String check(UserCouponDto dto) {
+        Integer couponId = dto.getCouponId();
         Integer userId = dto.getUserId();
-        if(couponId== null||userId == null){
+        if (couponId == null || userId == null) {
             return "couponId或者userId为空";
         }
         return null;
@@ -286,6 +314,7 @@ public class CouponServiceImpl implements CouponService {
     public List<TCoupon> getCouponListGuava() {
         List<TCoupon> coupons = Lists.newArrayList();
         try {
+            //这个缓存key没有意义，随便用一个数字都可以获取
             coupons = couponCache.get(1);
         } catch (Exception e) {
             e.printStackTrace();
@@ -392,7 +421,7 @@ public class CouponServiceImpl implements CouponService {
             });
 
     //把用户数据load到缓存
-    private UserVO loadUser(Integer userId) {
+    public UserVO loadUser(Integer userId) {
         return userServce.getUserById(userId);
     }
 
@@ -431,7 +460,6 @@ public class CouponServiceImpl implements CouponService {
 
     /**
      * @description: 容器启动即加载coupon数据到缓存
-     * user数据等访问时再加载缓存
      * @param:
      * @return: void
      */
@@ -469,22 +497,23 @@ public class CouponServiceImpl implements CouponService {
 
     /**
      * 用户下单后，绑定coupon与订单的关系
+     *
      * @param orderId
      * @param couponCode
      */
-    public  void updateCouponStatusAfterOrder(int userId,String couponCode,int orderId){
+    public void updateCouponStatusAfterOrder(int userId, String couponCode, int orderId) {
         TUserCouponExample example = new TUserCouponExample();
         example.createCriteria()
                 .andUserCouponCodeEqualTo(couponCode)
                 .andUserIdEqualTo(userId);
         List<TUserCoupon> tUserCoupons = userCouponMapper.selectByExample(example);
-        if(CollectionUtils.isEmpty(tUserCoupons)){
-            logger.warn("此 coupon 不存在  userCouponCode={}",couponCode);
+        if (CollectionUtils.isEmpty(tUserCoupons)) {
+            logger.warn("此 coupon 不存在  userCouponCode={}", couponCode);
             return;
         }
         TUserCoupon userCoupon = tUserCoupons.get(0);
 
-        userCoupon.setStatus(0);
+        userCoupon.setStatus(0);  //0--未核销
         userCoupon.setOrderId(orderId);
         userCouponMapper.updateByPrimaryKeySelective(userCoupon);
 
@@ -492,23 +521,25 @@ public class CouponServiceImpl implements CouponService {
 
     /**
      * 用户支付后，更新coupon为已核销,并且更新coupon公告栏
+     *
      * @param orderId
      * @param couponCode
      */
-    public  void updateCouponStatusAfterPay(int orderId,int userId){
-        List<TUserCoupon> tUserCoupons = getCouponByUserIdAndOrderId(userId,orderId);
-        if(CollectionUtils.isEmpty(tUserCoupons)){
-            logger.warn("这笔订单不存在 userId={}  orderId={}",userId,orderId);
+    public void updateCouponStatusAfterPay(int orderId, int userId) {
+        List<TUserCoupon> tUserCoupons = getUserrCouponByUserIdAndOrderId(userId, orderId);
+        if (CollectionUtils.isEmpty(tUserCoupons)) {
+            logger.warn("这笔订单不存在 userId={}  orderId={}", userId, orderId);
             return;
         }
         TUserCoupon userCoupon = tUserCoupons.get(0);
 
         //核销优惠券
-        userCoupon.setStatus(1);
+        userCoupon.setStatus(1); //1--已核销
         userCouponMapper.updateByPrimaryKeySelective(userCoupon);
 
         //更新coupon公告栏
         int couponId = userCoupon.getCouponId();
+
         String userCouonStr = userId + "_" + couponId;
         updateCouponNotice(userCouonStr);
 
@@ -516,34 +547,33 @@ public class CouponServiceImpl implements CouponService {
 
 
     /**
-     * @description:  取消订单后，要解除优惠券和订单的关系，并初始化优惠券的使用状态
+     * @description: 取消订单后，要解除优惠券和订单的关系，并初始化优惠券的使用状态
      * @param: userId
      * @param: orderId
      * @return: void
      */
     public void updateCouponStatusAfterCancelOrder(Integer userId, Integer orderId) {
-        List<TUserCoupon> tUserCoupons = getCouponByUserIdAndOrderId(userId,orderId);
-        if(CollectionUtils.isEmpty(tUserCoupons)){
-            logger.warn("这笔订单不存在 userId={}  orderId={}",userId,orderId);
+        List<TUserCoupon> tUserCoupons = getUserrCouponByUserIdAndOrderId(userId, orderId);
+        if (CollectionUtils.isEmpty(tUserCoupons)) {
+            logger.warn("这笔订单不存在 userId={}  orderId={}", userId, orderId);
             return;
         }
         TUserCoupon userCoupon = tUserCoupons.get(0);
-        userCoupon.setOrderId(0);
-        userCoupon.setStatus(0);
+        userCoupon.setOrderId(0); //解绑优惠券
+        userCoupon.setStatus(0); //改为未核销
         userCouponMapper.updateByPrimaryKeySelective(userCoupon);
 
 
     }
 
 
-
     /**
-     * @description:  根据userId和orderId查询用户优惠券
+     * @description: 根据userId和orderId查询用户优惠券
      * @param: userId
      * @param: orderId
      * @return: TUserCoupon
      */
-    private List<TUserCoupon> getCouponByUserIdAndOrderId(int userId,int orderId){
+    private List<TUserCoupon> getUserrCouponByUserIdAndOrderId(int userId, int orderId) {
         TUserCouponExample example = new TUserCouponExample();
         example.createCriteria().andUserIdEqualTo(userId)
                 .andOrderIdEqualTo(orderId);
@@ -555,58 +585,113 @@ public class CouponServiceImpl implements CouponService {
 
 
     /**
-     * @description:  用户核销coupon后，把coupon信息保存到redis，同时删除redis中多余的coupon
-     *                接收coupon优惠券核销mq的时候被调用,以时间窗口展示前N条数据,userCouponStr代表userId_couponId
+     * @description: 用户核销coupon后，把coupon信息保存到redis，同时删除redis中多余的coupon
+     * 接收coupon优惠券核销mq的时候被调用,以时间窗口展示前N条数据,userCouponStr代表userId_couponId
      * @param: userCouonStr
      * @return: void
      */
-    public void updateCouponNotice(String userCouonStr){
+    public void updateCouponNotice(String userCouonStr) {
         //把 userId_CouponId 存入redis的sortedSet
         redisTemplate.opsForZSet().add(COUPON_NOTICE_KEY, userCouonStr, System.currentTimeMillis());
-        //按score升序排，取出sorted中全部数据
+        //按score升序排，取出sortedSet中全部数据
         Set couponSet = redisTemplate.opsForZSet().range(COUPON_NOTICE_KEY, 0, -1);
-        //如果couponSet中的数据超额了，则删除score最小，即是最老那条数据
-        if(couponSet.size() > COUPON_NOTICE_NUM){
+        //如果couponSet中的数据超额了，则删除score最小，即是第一条数据
+        if (couponSet.size() > COUPON_NOTICE_NUM) {
             String remUserCouponStr = (String) couponSet.stream().findFirst().get();
-            redisTemplate.opsForZSet().remove(COUPON_NOTICE_KEY,remUserCouponStr);
+            redisTemplate.opsForZSet().remove(COUPON_NOTICE_KEY, remUserCouponStr);
         }
 
     }
+
+    /**
+     * @description: 从redis查询coupon公告栏前N条数据       有bug，转为map那里可能会报duplicate key
+     * @param:
+     * @return: List<String>
+     */
+//    @Override
+//    public List<CouponNoticeDto> queryCouponNotice(){
+//        //set  userId_couponId                             按score倒序排
+//        Set<String> couponSet = redisTemplate.opsForZSet().reverseRange(COUPON_NOTICE_KEY, 0, -1);
+//
+//        if(couponSet != null && couponSet.size() > 0){
+//            //获取set里面前N条数据   userId_couponId
+//            List<String> userCouponStrs = couponSet.stream().limit(COUPON_NOTICE_NUM).collect(Collectors.toList());
+//            //map  couponId:userId
+//            Map<String, String> couponUserMap = userCouponStrs.stream().collect(Collectors.toMap(o -> o.split("_")[1], o -> o.split("_")[0]));
+//            //List   couponId
+//            List<String> couponIds = userCouponStrs.stream().map(o -> o.split("_")[1]).collect(Collectors.toList());
+//            //String   "couponId1,couponId2,couponId3"
+//            String couponIdsStr = StringUtils.join(couponIds, ",");
+//            //通过couponIdStrs批量获取coupon缓存数据
+//            List<TCoupon> coupons = getCouponListByIds(couponIdsStr);
+//            //        List<TCoupon> ---> List<CouponNoticeDto>
+//            List<CouponNoticeDto> dtos = coupons.stream().map(coupon -> {
+//                CouponNoticeDto dto = new CouponNoticeDto();
+//                BeanUtils.copyProperties(coupon, dto);
+//                int userId = Integer.parseInt(couponUserMap.get(coupon.getId()+""));
+//
+//                dto.setUserId(userId);
+//                UserVO user = getUserById(userId);
+//                dto.setUserName(user.getUsername());
+//                return dto;
+//            }).collect(Collectors.toList());
+//
+//            logger.info("coupon notice data:{}",JSONObject.toJSON(dtos));
+//            return dtos;
+//        }
+//
+//        return null;
+//
+//    }
+
 
     /**
      * @description: 从redis查询coupon公告栏前N条数据
      * @param:
      * @return: List<String>
      */
-    @Override
-    public List<CouponNoticeDto> queryCouponNotice(){
-        //set  userId_couponId
-        Set<String> couponSet = redisTemplate.opsForZSet().reverseRange(COUPON_NOTICE_KEY, 0, -1);
-        //获取set里面前N条数据   userId_couponId
-        List<String> userCouponStrs = couponSet.stream().limit(COUPON_NOTICE_NUM).collect(Collectors.toList());
-        //map  couponId:userId
-        Map<String, String> couponUserMap = userCouponStrs.stream().collect(Collectors.toMap(o -> o.split("_")[1], o -> o.split("_")[0]));
-        //List   couponId
-        List<String> couponIds = userCouponStrs.stream().map(o -> o.split("_")[1]).collect(Collectors.toList());
-        //String   1,2,3
-        String couponIdsStr = StringUtils.join(couponIds, ",");
-        //通过couponIdStrs批量获取coupon缓存数据
-        List<TCoupon> coupons = getCouponListByIds(couponIdsStr);
-        //        List<TCoupon> ---> List<CouponNoticeDto>
-        List<CouponNoticeDto> dtos = coupons.stream().map(coupon -> {
-            CouponNoticeDto dto = new CouponNoticeDto();
-            BeanUtils.copyProperties(coupon, dto);
-            int userId = Integer.parseInt(couponUserMap.get(coupon.getId()+""));
-            dto.setUserId(userId);
-            UserVO user = getUserById(userId);
-            dto.setUserName(user.getUsername());
-            return dto;
-        }).collect(Collectors.toList());
+    public List<CouponNoticeDto> queryCouponNotice() {
+        //set  userId_couponId                             按score倒序排
+//        Set<String> couponSet = redisTemplate.opsForZSet().reverseRange(COUPON_NOTICE_KEY, 0, -1);
 
-        logger.info("coupon notice data:{}",JSONObject.toJSON(dtos));
-        return dtos;
+        Set<ZSetOperations.TypedTuple<String>> couponSet = redisTemplate.opsForZSet().reverseRangeWithScores(COUPON_NOTICE_KEY, 0, -1);
 
+        if (couponSet != null && couponSet.size() > 0) {
+            //获取set里面前N条数据   userId_couponId + score
+            List<ZSetOperations.TypedTuple<String>> userCouponStrs = couponSet.stream().limit(COUPON_NOTICE_NUM).collect(Collectors.toList());
 
+            List<CouponNoticeDto> dtos = Lists.newArrayList();
+
+            userCouponStrs.forEach(o -> {
+                String couponStr = o.getValue();
+
+                //score值，即是存入该条数据的时间戳，科学计数法表示
+                double score = o.getScore();
+                BigDecimal db = new BigDecimal(score);
+                long longNum = Long.parseLong(db.toPlainString());
+                Date saveTime = new Date(longNum);
+
+                int userId = Integer.parseInt(couponStr.split("_")[0]);
+                String couponId = couponStr.split("_")[1];
+
+                UserVO user = getUserById(userId);
+                TCoupon coupon = getCouponListByIds(couponId).get(0);
+
+                CouponNoticeDto dto = new CouponNoticeDto();
+                BeanUtils.copyProperties(coupon, dto);
+                dto.setUserId(userId);
+                dto.setUserName(user.getUsername());
+                dto.setSaveTime(saveTime);
+
+                dtos.add(dto);
+
+            });
+
+            return dtos;
+
+        }
+
+        return null;
 
     }
 

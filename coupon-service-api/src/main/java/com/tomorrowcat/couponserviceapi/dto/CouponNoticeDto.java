@@ -1,6 +1,7 @@
 package com.tomorrowcat.couponserviceapi.dto;
 
 import java.io.Serializable;
+import java.util.Date;
 
 public class CouponNoticeDto implements Serializable {
     private Integer id;
@@ -22,6 +23,19 @@ public class CouponNoticeDto implements Serializable {
     private Integer userId;
 
     private String userName;
+
+    //notice保存到redis的时间
+    private Date saveTime;
+
+
+
+    public Date getSaveTime() {
+        return saveTime;
+    }
+
+    public void setSaveTime(Date saveTime) {
+        this.saveTime = saveTime;
+    }
 
     public String getUserName() {
         return userName;
@@ -117,6 +131,7 @@ public class CouponNoticeDto implements Serializable {
                 ", status=" + status +
                 ", userId=" + userId +
                 ", userName='" + userName + '\'' +
+                ", saveTime=" + saveTime +
                 '}';
     }
 }

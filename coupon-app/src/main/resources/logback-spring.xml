@@ -7,7 +7,7 @@
     <!--本地-->
 	<property name="LOG_HOME" value="./coupon-app" />
     <!--线上-->
-    <!--<property name="LOG_HOME" value="/usr/local/myNewDir/xd-class/online-project/27/online_shop/coupon/node1" />-->
+    <!--<property name="LOG_HOME" value="/usr/local/myNewDir/xd-class/online-project/27/online_shop/coupon/logs" />-->
 
 	<jmxConfigurator />
 

@@ -10,7 +10,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @SpringBootApplication
 @MapperScan("com.tomorrowcat.couponapp.mapper")
 @EnableDubboConfig
-//dubbo接口的实现类
+//dubbo接口的实现类           扫描user和coupon的dubbo服务
 @DubboComponentScan({"com.tomorrowcat.userapp.service.dubbo","com.tomorrowcat.couponapp.service.dubbo"})
 @EnableScheduling
 public class CouponAppApplication {

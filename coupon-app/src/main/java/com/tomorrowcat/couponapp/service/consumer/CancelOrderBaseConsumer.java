@@ -1,7 +1,6 @@
 package com.tomorrowcat.couponapp.service.consumer;
 
 import com.alibaba.fastjson.JSONObject;
-import com.tomorrowcat.couponapp.config.ConsumerConfig;
 import com.tomorrowcat.couponapp.dto.OrderCouponDto;
 import com.tomorrowcat.couponapp.service.dubbo.CouponServiceImpl;
 import org.apache.rocketmq.client.consumer.listener.ConsumeConcurrentlyStatus;
@@ -19,18 +18,18 @@ import java.io.UnsupportedEncodingException;
 import java.util.List;
 
 /**
- * @description:
+ * @description: 取消订单消息消费者
  * @author: kim
  * @create: 2021-08-02 21:57
  * @version: 1.0.0
  */
 @Service
-public class CancelOrderConsumer extends ConsumerConfig implements ApplicationListener<ContextRefreshedEvent> {
+public class CancelOrderBaseConsumer extends BaseConsumer implements ApplicationListener<ContextRefreshedEvent> {
 
     @Resource
     private CouponServiceImpl couponService;
 
-    private static final Logger log = LoggerFactory.getLogger(CancelOrderConsumer.class);
+    private static final Logger log = LoggerFactory.getLogger(CancelOrderBaseConsumer.class);
 
     @Value("${rocketmq.consumer.cancel.groupName}")
     private String groupName;
@@ -50,6 +49,7 @@ public class CancelOrderConsumer extends ConsumerConfig implements ApplicationLi
     @Override
     public ConsumeConcurrentlyStatus dealBody(List<MessageExt> msgs) {
         msgs.forEach(msg -> {
+
             byte[] body = msg.getBody();
             try{
                 String msgStr = new String(body, "utf-8");
@@ -74,6 +74,7 @@ public class CancelOrderConsumer extends ConsumerConfig implements ApplicationLi
     @Override
     public void onApplicationEvent(ContextRefreshedEvent event) {
         try{
+            //启动消费者
             super.consume(groupName,namesrvAddr,topic, tag);
         } catch (MQClientException e) {
             log.error("消费者监听器启动失败", e);

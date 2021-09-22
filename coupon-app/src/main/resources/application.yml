@@ -1,11 +1,13 @@
 server:
-   port: 8050
+   port: 8052
+
 druid:
   allow:
      ip: 127.0.0.1
   login:
      user_name:
      password:
+
 spring:
   datasource:
     driver-class-name: com.mysql.jdbc.Driver
@@ -28,10 +30,12 @@ spring:
       # 通过connectProperties属性来打开mergeSql功能；慢SQL记录
     connectionProperties: druid.stat.mergeSql=true;druid.stat.slowSqlMillis=5000
 
+
   redis:
     host: kim1
     port: 2683
     password: FSDFASN22RR2656jflds84kfjWYFADS37VUUYT84326
+    timeout: 6000ms
 
 
 #打印sql
@@ -43,7 +47,7 @@ spring:
 dubbo:
   application:
     name: coupon-app
-    qosPort: 22250
+    qosPort: 22252
   # 使用 zookeeper 注册中心暴露服务，注意要先开启 zookeeper
   # 注册中心id
   registry:
@@ -58,7 +62,7 @@ dubbo:
   protocol:
     name: dubbo
     # 协议端口
-    port: 20850
+    port: 20852
     # 协议访问log
     accesslog: dubbo-access.log
   # 重试次数

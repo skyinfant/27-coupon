@@ -1,4 +1,4 @@
-package com.tomorrowcat.couponapp.config;
+package com.tomorrowcat.couponapp.service.consumer;
 
 import org.apache.rocketmq.client.consumer.DefaultMQPushConsumer;
 import org.apache.rocketmq.client.consumer.listener.ConsumeConcurrentlyContext;
@@ -8,22 +8,21 @@ import org.apache.rocketmq.client.exception.MQClientException;
 import org.apache.rocketmq.common.message.MessageExt;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 
 import java.util.List;
 
 /**
- * @description:
+ * @description: 消费者基类
  * @author: kim
  * @create: 2021-08-02 21:36
  * @version: 1.0.0
  */
 
 @Configuration
-public abstract class ConsumerConfig {
+public abstract class BaseConsumer {
 
-    private static final Logger logger = LoggerFactory.getLogger(ConsumerConfig.class);
+    private static final Logger logger = LoggerFactory.getLogger(BaseConsumer.class);
 
     /**
      * @description:  消费消息

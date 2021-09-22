@@ -33,7 +33,7 @@ public class JMHSpringbootTest {
     }
 
     /**
-     * setup初始化容器的时候只执行一次
+     * 基准测试开始前执行     启动容器，创建bean
      */
     @Setup(Level.Trial)   //测试级别
     public void init(){
@@ -55,7 +55,7 @@ public class JMHSpringbootTest {
 
     //-------------------------------------------------
     /**
-     * benchmark执行多次，此注解代表触发我们所要进行基准测试的方法
+     * benchmark可执行多次，此注解代表触发我们所要进行基准测试的方法
      * 测试优惠券列表接口性能    从guava cache中取数据
      */
     @Benchmark
@@ -64,7 +64,6 @@ public class JMHSpringbootTest {
     }
 
     /**
-     * benchmark执行多次，此注解代表触发我们所要进行基准测试的方法
      * 测试优惠券列表接口性能    从caffeine中取数据
      */
     @Benchmark
@@ -74,7 +73,7 @@ public class JMHSpringbootTest {
 
 
     /**
-     * @description:  从concurrentMap中取数据
+     * @description:  从concurrentHashMap中取数据
      * @param: 
      * @return: void
      */

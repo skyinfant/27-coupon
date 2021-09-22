@@ -1,6 +1,5 @@
 package com.tomorrowcat.couponapp.service.consumer;
 
-import com.tomorrowcat.couponapp.config.ConsumerConfig;
 import org.apache.rocketmq.client.consumer.listener.ConsumeConcurrentlyStatus;
 import org.apache.rocketmq.client.exception.MQClientException;
 import org.apache.rocketmq.common.message.MessageExt;
@@ -21,9 +20,9 @@ import java.util.List;
  * @version: 1.0.0
  */
 @Service
-public class TestConsumer extends ConsumerConfig implements ApplicationListener<ContextRefreshedEvent> {
+public class TestBaseConsumer extends BaseConsumer implements ApplicationListener<ContextRefreshedEvent> {
 
-    private static final Logger log = LoggerFactory.getLogger(TestConsumer.class);
+    private static final Logger log = LoggerFactory.getLogger(TestBaseConsumer.class);
 
     @Value("${rocketmq.consumer.test.groupName}")
     private String groupName;

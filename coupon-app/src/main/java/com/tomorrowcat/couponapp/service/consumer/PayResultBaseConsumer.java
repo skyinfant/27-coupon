@@ -1,7 +1,6 @@
 package com.tomorrowcat.couponapp.service.consumer;
 
 import com.alibaba.fastjson.JSONObject;
-import com.tomorrowcat.couponapp.config.ConsumerConfig;
 import com.tomorrowcat.couponapp.dto.OrderCouponDto;
 import com.tomorrowcat.couponapp.service.dubbo.CouponServiceImpl;
 import org.apache.rocketmq.client.consumer.listener.ConsumeConcurrentlyStatus;
@@ -19,27 +18,26 @@ import java.io.UnsupportedEncodingException;
 import java.util.List;
 
 /**
- * @description:
+ * @description: 支付消息消费者
  * @author: kim
  * @create: 2021-08-02 21:57
  * @version: 1.0.0
  */
 @Service
-public class SaveOrderConsumer extends ConsumerConfig implements ApplicationListener<ContextRefreshedEvent> {
+public class PayResultBaseConsumer extends BaseConsumer implements ApplicationListener<ContextRefreshedEvent> {
+
+    private static final Logger log = LoggerFactory.getLogger(PayResultBaseConsumer.class);
+    @Value("${rocketmq.consumer.pay.groupName}")
+    private String groupName;
+    @Value("${rocketmq.consumer.pay.namesrvAddr}")
+    private String namesrvAddr;
+    @Value("${rocketmq.consumer.pay.topic}")
+    private String topic;
+    @Value("${rocketmq.consumer.pay.tag}")
+    private String tag;
 
     @Resource
     private CouponServiceImpl couponService;
-
-    private static final Logger log = LoggerFactory.getLogger(SaveOrderConsumer.class);
-
-    @Value("${rocketmq.consumer.order.groupName}")
-    private String groupName;
-    @Value("${rocketmq.consumer.order.namesrvAddr}")
-    private String namesrvAddr;
-    @Value("${rocketmq.consumer.order.topic}")
-    private String topic;
-    @Value("${rocketmq.consumer.order.tag}")
-    private String tag;
 
 
     /**
@@ -54,9 +52,9 @@ public class SaveOrderConsumer extends ConsumerConfig implements ApplicationList
             try{
                 String msgStr = new String(body, "utf-8");
                 OrderCouponDto dto = JSONObject.parseObject(msgStr,OrderCouponDto.class);
-                 //用户下单后，绑定coupon与订单的关系
-                couponService.updateCouponStatusAfterOrder(dto.getUserId(), dto.getCouponCode(), dto.getOrderId());
-                log.info("save order receive mesg: {}",msgStr);
+                //用户支付后，更新coupon为已核销,并且更新coupon公告栏
+                couponService.updateCouponStatusAfterPay(dto.getOrderId(), dto.getUserId());
+                log.info("pay order receive message: {}",msgStr);
             } catch (UnsupportedEncodingException e) {
                 log.error("body转字符串失败",e);
 
@@ -74,6 +72,7 @@ public class SaveOrderConsumer extends ConsumerConfig implements ApplicationList
     @Override
     public void onApplicationEvent(ContextRefreshedEvent event) {
         try{
+            //启动消费者
             super.consume(groupName,namesrvAddr,topic, tag);
         } catch (MQClientException e) {
             log.error("消费者监听器启动失败", e);
